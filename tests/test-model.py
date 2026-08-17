@@ -9,7 +9,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.model import TransformerConfig, TransformerLM
 
-
 def test_1_model_forward_pass():
     config = TransformerConfig()
     model = TransformerLM(config)
@@ -120,6 +119,48 @@ def test_4_swiglu_vs_relu_parameter_match():
     print(f"   • SwiGLU Non-Embedding Params: {swiglu_non_emb:,}")
     print(f"   • ReLU Non-Embedding Params:   {relu_non_emb:,}")
 
+def test_5_kv_cache_matches_full_forward():
+    config = TransformerConfig()
+    model = TransformerLM(config)
+    model.eval()
+
+    tokens = torch.randint(
+        0,
+        config.vocab_size,
+        (1, 16)
+    )
+
+    with torch.no_grad():
+        # Normal forward pass
+        full_logits = model(tokens)
+
+        # Cached autoregressive forward pass
+        model.reset_cache(
+            batch_size=1,
+            device=tokens.device,
+            dtype=model.token_embeddings.weight.dtype,
+        )
+
+        cached_outputs = []
+
+        for i in range(tokens.size(1)):
+            logits = model(
+                tokens[:, i:i+1],
+                use_cache=True
+            )
+            cached_outputs.append(logits)
+
+        cached_logits = torch.cat(cached_outputs, dim=1)
+
+    assert torch.allclose(
+        full_logits,
+        cached_logits,
+        atol=1e-5,
+        rtol=1e-5,
+    ), "KV-cache output differs from normal forward pass."
+
+    print("✓ Test 5 Passed: KV-cache matches full forward pass.")
+
 
 if __name__ == "__main__":
     print("Running TransformerLM Model Test Suite...\n" + "=" * 50)
@@ -127,4 +168,5 @@ if __name__ == "__main__":
     test_2_parameter_count()
     test_3_ablations_forward_pass()
     test_4_swiglu_vs_relu_parameter_match()
+    test_5_kv_cache_matches_full_forward()
     print("=" * 50 + "\nAll model tests passed successfully!")
