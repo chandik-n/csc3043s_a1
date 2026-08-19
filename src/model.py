@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Optional
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ class RMSNorm(nn.Module):
         self.eps = eps
         self.gain = nn.Parameter(torch.ones(d))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         in_dtype = x.dtype
         x = x.to(torch.float32)
 
@@ -25,11 +25,11 @@ class RMSNorm(nn.Module):
 class SwiGLU(nn.Module):
     def __init__(self, d_model: int, d_ff: int):
         super().__init__()
-        self.w1 = nn.Linear(d_model, d_ff, bias=False)  # gate branch
-        self.w3 = nn.Linear(d_model, d_ff, bias=False)  # value branch
-        self.w2 = nn.Linear(d_ff, d_model, bias=False)  # down projection
+        self.w1 = nn.Linear(d_model, d_ff, bias=False)  
+        self.w3 = nn.Linear(d_model, d_ff, bias=False)
+        self.w2 = nn.Linear(d_ff, d_model, bias=False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
@@ -39,7 +39,7 @@ class ReLUFFN(nn.Module):
         self.w1 = nn.Linear(d_model, d_ff, bias=False)
         self.w2 = nn.Linear(d_ff, d_model, bias=False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         return self.w2(F.relu(self.w1(x)))
 
 
@@ -61,9 +61,9 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("cos", angles.cos(), persistent=False)
         self.register_buffer("sin", angles.sin(), persistent=False)
 
-    def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
-        cos = self.cos[positions]  # (seq_len, d_head/2)
-        sin = self.sin[positions]  # (seq_len, d_head/2)
+    def forward(self, x, positions):
+        cos = self.cos[positions]
+        sin = self.sin[positions]
 
         x_even, x_odd = x[..., 0::2], x[..., 1::2]
 
@@ -99,35 +99,22 @@ class CausalSelfAttention(nn.Module):
         self.q_norm = RMSNorm(self.d_head) if use_qk_norm else nn.Identity()
         self.k_norm = RMSNorm(self.d_head) if use_qk_norm else nn.Identity()
 
-        # In-layer KV cache buffers
-        self.key_cache: Optional[torch.Tensor] = None
-        self.value_cache: Optional[torch.Tensor] = None
-        self.cache_position: int = 0
+        self.key_cache = None
+        self.value_cache = None
+        self.cache_position = 0
 
-    def reset_cache(
-        self,
-        batch_size: int,
-        device: torch.device,
-        dtype: torch.dtype,
-    ):
-        """Allocates key and value buffers matching the exact specified layer precision."""
+    def reset_cache(self, batch_size: int, device: torch.device, dtype: torch.dtype):
         shape = (batch_size, self.n_heads, self.context_length, self.d_head)
         self.key_cache = torch.zeros(shape, device=device, dtype=dtype)
         self.value_cache = torch.zeros(shape, device=device, dtype=dtype)
         self.cache_position = 0
 
-    def forward(
-        self, x: torch.Tensor, use_cache: bool = False
-    ) -> torch.Tensor:
+    def forward(self, x, use_cache: bool = False):
         batch, seq_len, _ = x.shape
 
-        # Positional indexing considering cached history length
         start_pos = self.cache_position if use_cache else 0
-        positions = torch.arange(
-            start_pos, start_pos + seq_len, device=x.device
-        )
+        positions = torch.arange(start_pos, start_pos + seq_len, device=x.device)
 
-        # Projections -> (batch, n_heads, seq_len, d_head)
         q = (
             self.q_proj(x)
             .view(batch, seq_len, self.n_heads, self.d_head)
@@ -144,28 +131,21 @@ class CausalSelfAttention(nn.Module):
             .transpose(1, 2)
         )
 
-        # QK Normalization & RoPE
         q, k = self.q_norm(q), self.k_norm(k)
         if self.use_rope and self.rope is not None:
             q, k = self.rope(q, positions), self.rope(k, positions)
 
         if use_cache:
             if self.key_cache is None or self.value_cache is None:
-                raise RuntimeError(
-                    "Cache buffers not initialized. Call model.reset_cache() first."
-                )
+                raise RuntimeError("Call model.reset_cache() before using use_cache=True")
 
             end_pos = start_pos + seq_len
             if end_pos > self.context_length:
-                raise RuntimeError(
-                    f"Exceeded context_length ({end_pos} > {self.context_length})."
-                )
+                raise RuntimeError(f"Exceeded max context_length of {self.context_length}")
 
-            # Insert newly computed keys and values into persistent buffers
             self.key_cache[:, :, start_pos:end_pos, :] = k
             self.value_cache[:, :, start_pos:end_pos, :] = v
 
-            # Retrieve accumulated key/value sequence history
             k = self.key_cache[:, :, :end_pos, :]
             v = self.value_cache[:, :, :end_pos, :]
 
@@ -174,14 +154,11 @@ class CausalSelfAttention(nn.Module):
         else:
             total_seq_len = seq_len
 
-        # Select masking strategy based on step type
         if use_cache:
             if seq_len == 1:
-                # Single-token decode step: attend across past context
                 is_causal = False
                 attn_mask = None
             else:
-                # Chunked/continuation prefill step: causal mask on current input relative to full context
                 is_causal = False
                 q_pos = torch.arange(
                     start_pos, start_pos + seq_len, device=x.device
@@ -189,7 +166,6 @@ class CausalSelfAttention(nn.Module):
                 k_pos = torch.arange(total_seq_len, device=x.device)[None, :]
                 attn_mask = k_pos <= q_pos
         else:
-            # Uncached pass
             is_causal = True
             attn_mask = None
 
@@ -202,7 +178,7 @@ class CausalSelfAttention(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, config: "TransformerConfig", rope=None):
+    def __init__(self, config, rope=None):
         super().__init__()
 
         if config.use_rmsnorm:
@@ -229,9 +205,7 @@ class TransformerBlock(nn.Module):
         else:
             raise ValueError(f"Unknown ffn_type: {config.ffn_type}")
 
-    def forward(
-        self, x: torch.Tensor, use_cache: bool = False
-    ) -> torch.Tensor:
+    def forward(self, x, use_cache: bool = False):
         x = x + self.attn(self.attn_norm(x), use_cache=use_cache)
         x = x + self.ffn(self.ffn_norm(x))
         return x
@@ -304,16 +278,13 @@ class TransformerLM(nn.Module):
         device: torch.device,
         dtype: Optional[torch.dtype] = None,
     ):
-        """Initializes internal KV cache buffers matching the active model/weight precision."""
         if dtype is None:
             dtype = self.token_embeddings.weight.dtype
 
         for layer in self.layers:
             layer.attn.reset_cache(batch_size, device, dtype)
 
-    def forward(
-        self, token_ids: torch.Tensor, use_cache: bool = False
-    ) -> torch.Tensor:
+    def forward(self, token_ids: torch.Tensor, use_cache: bool = False):
         x = self.token_embeddings(token_ids)
 
         for layer in self.layers:

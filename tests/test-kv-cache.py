@@ -10,7 +10,7 @@ from src.model import TransformerConfig, TransformerLM
 
 
 def test_kv_cache_correctness():
-    # Set seed for reproducibility
+    #Set seed for reproducibility
     torch.manual_seed(42)
     device = torch.device("cpu")
 
@@ -18,14 +18,14 @@ def test_kv_cache_correctness():
     model = TransformerLM(config).to(device)
     model.eval()
 
-    # 1. Stress test with a longer 32-token sequence
+    #1. Stress test with a longer 32-token sequence
     tokens = torch.randint(0, config.vocab_size, (1, 32), device=device)
 
-    # Test A: Standard uncached full sequence forward pass
+    #Test A: Standard uncached full sequence forward pass
     with torch.no_grad():
         normal_logits = model(tokens, use_cache=False)
 
-    # Test B: Incremental cached forward pass
+    #Test B: Incremental cached forward pass
     model.reset_cache(batch_size=1, device=device)
     outputs = []
 
@@ -37,14 +37,14 @@ def test_kv_cache_correctness():
 
     cached_logits = torch.cat(outputs, dim=1)
 
-    # Verify output equivalence over 32 tokens
+    #Verify output equivalence over 32 tokens
     max_diff = (normal_logits - cached_logits).abs().max().item()
     is_close = torch.allclose(normal_logits, cached_logits, atol=1e-5, rtol=1e-5)
 
     assert is_close, f"KV Cache logits mismatch! Maximum absolute difference: {max_diff}"
     print(f"✓ Test 1 Passed: 32-token uncached vs cached match (Max Diff: {max_diff:.2e}).")
 
-    # 2. Test cache reset functionality to ensure state isn't polluted
+    #2. Test cache reset functionality to ensure state isn't polluted
     model.reset_cache(batch_size=1, device=device)
 
     with torch.no_grad():
