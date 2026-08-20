@@ -231,6 +231,51 @@ def test_7_from_files():
         Path(vocab_path).unlink(missing_ok=True)
         Path(merges_path).unlink(missing_ok=True)
 
+def test_8_validation_100_docs_round_trip():
+    train_path = PROJECT_ROOT / "data" / "TinyStories_train_part1.txt"
+    val_path = PROJECT_ROOT / "data" / "TinyStories_val.txt"
+
+    if not val_path.exists() or not train_path.exists():
+        print("Test 8 Skipped: data/TinyStories_train.txt or TinyStories_val.txt missing.")
+        return
+
+    # 1. Train a BPE tokenizer dynamically on a slice of training data
+    print("Training temporary tokenizer for Test 8...")
+    vocab, merges = train_bpe(
+        str(train_path), vocab_size=1000, special_tokens=[END_OF_TEXT]
+    )
+
+    # 2. Save temporarily to test loading from disk
+    with tempfile.TemporaryDirectory() as tmpdir:
+        vocab_path = Path(tmpdir) / "vocab.json"
+        merges_path = Path(tmpdir) / "merges.txt"
+        save_tokenizer_files(vocab, merges, str(vocab_path), str(merges_path))
+
+        tokenizer = BPETokenizer.from_files(
+            str(vocab_path), str(merges_path), special_tokens=[END_OF_TEXT]
+        )
+
+        # 3. Read 100 validation docs
+        with open(val_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            docs = [d.strip() for d in content.split("<|endoftext|>") if d.strip()][:100]
+
+        assert len(docs) == 100, f"Expected 100 docs from validation set, found {len(docs)}"
+
+        # 4. Assert 100% round-trip string equality
+        mismatches = 0
+        for idx, doc in enumerate(docs):
+            encoded = tokenizer.encode(doc)
+            decoded = tokenizer.decode(encoded)
+            if decoded != doc:
+                mismatches += 1
+                print(f"Mismatch at doc {idx}:")
+                print(f"  Expected: {repr(doc[:60])}")
+                print(f"  Got:      {repr(decoded[:60])}")
+
+        assert mismatches == 0, f"{mismatches}/100 validation documents failed round-trip!"
+        print("✓ Test 8 Passed: 100 real validation documents passed encode -> decode round-trip.")
+
 
 if __name__ == "__main__":
     print("Running Tokenizer Test Suite...\n" + "=" * 40)
@@ -241,4 +286,5 @@ if __name__ == "__main__":
     test_5_special_token_round_trip()
     test_6_encode_iterable()
     test_7_from_files()
+    test_8_validation_100_docs_round_trip()
     print("=" * 40 + "\nAll tests passed successfully!")

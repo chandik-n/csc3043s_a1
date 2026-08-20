@@ -110,13 +110,14 @@ def test_cached_vs_uncached_agreement(setup_model):
     prompt = "1 2 3 4 5"
 
     res_cached = generate(
-        model, tokenizer, prompt, max_new_tokens=10, temperature=0.0, use_cache=True
+        model, tokenizer, prompt, max_new_tokens=100, temperature=0.0, use_cache=True
     )
     res_uncached = generate(
-        model, tokenizer, prompt, max_new_tokens=10, temperature=0.0, use_cache=False
+        model, tokenizer, prompt, max_new_tokens=100, temperature=0.0, use_cache=False
     )
 
-    assert res_cached == res_uncached
+    assert res_cached == res_uncached, "Cache vs No-Cache trajectory mismatch at step <= 100!"
+    print("✓ Test Passed: 100-token greedy continuation is bitwise identical (cache == no-cache).")
 
 
 def test_max_new_tokens_zero(setup_model):

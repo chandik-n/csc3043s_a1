@@ -1,7 +1,12 @@
 venv/
-data/
+.venv/
+data/*
 *.npy
 checkpoints/
 __pycache__/
 .ipynb_checkpoints/
 test_checkpoints/
+!data/vocab_4k.json
+!data/merges_4k.txt
+*.bin
+*.pt
