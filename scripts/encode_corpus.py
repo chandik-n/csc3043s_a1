@@ -21,7 +21,7 @@ def encode_file(input_txt: Path, output_bin: Path, tokenizer: BPETokenizer):
     arr = np.array(tokens, dtype=np.uint16)
     arr.tofile(output_bin)
     print(
-        f"  ✓ Saved {len(arr):,} tokens to {output_bin.name} ({output_bin.stat().st_size / 1e6:.2f} MB)"
+        f"Saved {len(arr):,} tokens to {output_bin.name} ({output_bin.stat().st_size / 1e6:.2f} MB)"
     )
 
 
@@ -41,7 +41,7 @@ def main():
             str(train_p1), vocab_size=4000, special_tokens=[END_OF_TEXT]
         )
         save_tokenizer_files(vocab, merges, str(vocab_file), str(merges_file))
-        print("  ✓ Saved vocab_4k.json and merges_4k.txt")
+        print("Saved vocab_4k.json and merges_4k.txt")
 
     # Step 2: Instantiate Tokenizer
     tokenizer = BPETokenizer.from_files(

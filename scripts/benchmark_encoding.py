@@ -29,7 +29,7 @@ def run_benchmark():
             str(train_path), vocab_size=4000, special_tokens=[END_OF_TEXT]
         )
         save_tokenizer_files(vocab, merges, str(vocab_file), str(merges_file))
-        print("✓ Saved vocab_4k.json and merges_4k.txt to data/")
+        print("Saved vocab_4k.json and merges_4k.txt to data/")
 
     print("Loading V=4000 Tokenizer...")
     tokenizer = BPETokenizer.from_files(
