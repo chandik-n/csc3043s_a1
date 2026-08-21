@@ -35,25 +35,22 @@ def run_command(cmd):
 
 def read_logs(log_path):
     logs = {}
-    epochs = {}
     with open(log_path, "r") as f:
         for line in f:
             if line.strip():
                 entry = json.loads(line)
                 logs[entry["step"]] = entry["train_loss"]
-                if "current_epoch" in entry:
-                    epochs[entry["step"]] = entry["current_epoch"]
-    return logs, epochs
+    return logs
 
 
 def main():
-    print("Creating dummy dataset (300 tokens = 10 batches/epoch to force 5 rollovers)...")
+    print("Creating dummy dataset...")
     create_dummy_data()
     clean_dirs()
 
     python_bin = sys.executable
 
-    #1. Uninterrupted run: 50 steps
+    # 1. Uninterrupted run: 50 steps
     print("\n=== 1. Running 50 steps uninterrupted ===")
     cmd_full = [
         python_bin,
@@ -82,7 +79,7 @@ def main():
     ]
     run_command(cmd_full)
 
-    #2. First 25 steps (saving checkpoint at step 25)
+    # 2. First 25 steps (saving checkpoint at step 25)
     print("=== 2. Running first 25 steps ===")
     cmd_part1 = [
         python_bin,
@@ -111,7 +108,7 @@ def main():
     ]
     run_command(cmd_part1)
 
-    #3. Resume from step 25 to 50
+    # 3. Resume from step 25 to 50
     print("=== 3. Resuming from step 25 to 50 ===")
     ckpt_25 = os.path.join(RESUMED_DIR, "checkpoint_step_25.pt")
     cmd_part2 = [
@@ -143,34 +140,27 @@ def main():
     ]
     run_command(cmd_part2)
 
-    full_logs, full_epochs = read_logs(os.path.join(FULL_DIR, "train_log.jsonl"))
-    resumed_logs, resumed_epochs = read_logs(os.path.join(RESUMED_DIR, "train_log.jsonl"))
-
-    max_epoch = max(full_epochs.values()) if full_epochs else 0
-    print(f"\nSANITY CHECK: Maximum epoch reached during run = {max_epoch}")
-    if max_epoch == 0:
-        print("FAILURE: Test did NOT cross epoch boundaries! Adjust dummy data size.")
-        sys.exit(1)
+    full_logs = read_logs(os.path.join(FULL_DIR, "train_log.jsonl"))
+    resumed_logs = read_logs(os.path.join(RESUMED_DIR, "train_log.jsonl"))
 
     print("\nSTEP-BY-STEP COMPARISON (STEPS 26 - 50)")
-    print(f"{'Step':<6} | {'Epoch':<6} | {'Full Loss':<12} | {'Resumed Loss':<14} | {'Match?'}")
+    print(f"{'Step':<6} | {'Full Loss':<12} | {'Resumed Loss':<14} | {'Match?'}")
 
     all_matched = True
     for step in range(26, 51):
         f_loss = full_logs.get(step)
         r_loss = resumed_logs.get(step)
-        ep = full_epochs.get(step, "?")
 
         match = (f_loss is not None) and (r_loss is not None) and (abs(f_loss - r_loss) < 1e-5)
         if not match:
             all_matched = False
 
         status = "OK" if match else "MISMATCH"
-        print(f"{step:<6} | {str(ep):<6} | {str(f_loss):<12} | {str(r_loss):<14} | {status}")
+        print(f"{step:<6} | {str(f_loss):<12} | {str(r_loss):<14} | {status}")
 
     if all_matched:
         print(
-            f"\nSUCCESS: Resumed trajectory matches uninterrupted trajectory bitwise across {max_epoch + 1} epochs!"
+            "\nSUCCESS: Resumed trajectory matches uninterrupted trajectory bitwise!"
         )
     else:
         print("\nFAILURE: Mismatch detected between uninterrupted and resumed runs.")

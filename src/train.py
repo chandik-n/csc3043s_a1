@@ -42,28 +42,34 @@ def get_optimizer(model, lr, weight_decay):
 
 
 def get_lr_scheduler(optimizer, warmup_steps, max_steps, base_lr):
-    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
-        optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps
-    )
-    cosine_steps = max(1, max_steps - warmup_steps)
-    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=cosine_steps, eta_min=0.1 * base_lr
-    )
-    return torch.optim.lr_scheduler.SequentialLR(
-        optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_steps]
-    )
+    if warmup_steps > 0:
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps
+        )
+        cosine_steps = max(1, max_steps - warmup_steps)
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=cosine_steps, eta_min=0.1 * base_lr
+        )
+        return torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_steps]
+        )
+    else:
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_steps, eta_min=0.1 * base_lr
+        )
 
 
-def evaluate(model, val_loader, device, use_autocast, autocast_dtype, eval_batches=20):
+def evaluate(model, val_dataset, batch_size, device, use_autocast, autocast_dtype, seed=42, eval_batches=20):
+    """Evaluates the model deterministically in O(batch_size) memory per iteration."""
     model.eval()
     total_loss = 0.0
     count = 0
 
     with torch.no_grad():
-        for i, (x, y) in enumerate(val_loader):
-            if i >= eval_batches:
-                break
-            x, y = x.to(device), y.to(device)
+        for i in range(eval_batches):
+            # Fixed deterministic evaluation step offset
+            eval_step = 100_000 + i
+            x, y = get_batch(val_dataset, seed, eval_step, batch_size, device)
             with torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=use_autocast):
                 logits = model(x)
                 loss = nn.functional.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
@@ -74,18 +80,19 @@ def evaluate(model, val_loader, device, use_autocast, autocast_dtype, eval_batch
     return total_loss / count if count > 0 else 0.0
 
 
-def get_epoch_indices(seed, epoch, dataset_len):
-    """Deterministically generate dataset indices for any given epoch."""
-    epoch_g = torch.Generator()
-    epoch_g.manual_seed(seed + epoch)
-    return torch.randperm(dataset_len, generator=epoch_g).tolist()
-
-
-def fetch_batch(dataset, indices, batch_idx, batch_size):
-    start = batch_idx * batch_size
-    end = min(start + batch_size, len(indices))
-    batch_indices = indices[start:end]
-    return dataset[batch_indices]
+def get_batch(dataset, seed: int, global_step: int, batch_size: int, device: torch.device):
+    """
+    Generates batch_size starting offsets deterministically per step 
+    without allocating or shuffling full-dataset index permutations.
+    """
+    gen_seed = (seed * 1_000_003 + global_step) & 0x7FFFFFFF
+    g = torch.Generator().manual_seed(gen_seed)
+    
+    total_samples = len(dataset)
+    batch_indices = torch.randint(0, total_samples, (batch_size,), generator=g).tolist()
+    
+    x, y = dataset[batch_indices]
+    return x.to(device), y.to(device)
 
 
 def main():
@@ -94,7 +101,7 @@ def main():
     parser.add_argument("--val_data", type=str, required=True)
     parser.add_argument("--out_dir", type=str, default="checkpoints")
 
-    #Training parameters
+    # Training parameters
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--context_length", type=int, default=256)
     parser.add_argument("--max_steps", type=int, default=5000)
@@ -108,7 +115,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume", type=str, default=None)
 
-    #Architecture Flags
+    # Architecture Flags
     parser.add_argument("--vocab_size", type=int, default=1500)
     parser.add_argument("--n_layers", type=int, default=4)
     parser.add_argument("--d_model", type=int, default=512)
@@ -152,7 +159,6 @@ def main():
 
     train_dataset = MemmapDataset(args.train_data, context_length=args.context_length)
     val_dataset = MemmapDataset(args.val_data, context_length=args.context_length)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
 
     start_step = 0
     tokens_processed = 0
@@ -170,21 +176,13 @@ def main():
         np.random.set_state(ckpt["rng_numpy"])
         random.setstate(ckpt["rng_random"])
 
-    total_samples = len(train_dataset)
-    epoch_size_in_batches = max(1, total_samples // args.batch_size)
-
     start_time = time.time()
     log_path = os.path.join(args.out_dir, "train_log.jsonl")
 
     model.train()
     for step in range(start_step + 1, args.max_steps + 1):
-        step_idx = step - 1
-        current_epoch = step_idx // epoch_size_in_batches
-        batch_idx_in_epoch = step_idx % epoch_size_in_batches
-
-        epoch_indices = get_epoch_indices(args.seed, current_epoch, total_samples)
-        x, y = fetch_batch(train_dataset, epoch_indices, batch_idx_in_epoch, args.batch_size)
-        x, y = x.to(device), y.to(device)
+        # Memory-efficient O(batch_size) batch fetching
+        x, y = get_batch(train_dataset, args.seed, step, args.batch_size, device)
 
         optimizer.zero_grad()
         with torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=use_autocast):
@@ -203,7 +201,7 @@ def main():
         val_loss_to_log = None
         if step % args.eval_interval == 0 or step == args.max_steps:
             val_loss_to_log = evaluate(
-                model, val_loader, device, use_autocast, autocast_dtype, eval_batches=args.eval_batches
+                model, val_dataset, args.batch_size, device, use_autocast, autocast_dtype, seed=args.seed, eval_batches=args.eval_batches
             )
             print(
                 f"Step {step}/{args.max_steps} | "
@@ -215,7 +213,6 @@ def main():
 
         log_data = {
             "step": step,
-            "current_epoch": current_epoch,
             "wall_clock": round(time.time() - start_time, 2),
             "tokens_processed": tokens_processed,
             "lr": current_lr,

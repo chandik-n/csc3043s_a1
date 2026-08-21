@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.model import TransformerLM, TransformerConfig
 from src.data import MemmapDataset
 
-
+ 
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
