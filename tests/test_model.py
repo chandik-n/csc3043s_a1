@@ -38,8 +38,8 @@ def test_2_parameter_count():
     non_emb_params = model.num_parameters(non_embedding=True)
     total_params = model.num_parameters(non_embedding=False)
 
-    expected_emb = config.vocab_size * config.d_model  # 2,048,000
-    expected_head = config.vocab_size * config.d_model  # 2,048,000
+    expected_emb = config.vocab_size * config.d_model  
+    expected_head = config.vocab_size * config.d_model  
 
     assert (
         emb_params == expected_emb
@@ -62,17 +62,14 @@ def test_3_ablations_forward_pass():
     batch_size, seq_len = 2, 8
     dummy_input = torch.randint(0, 4000, (batch_size, seq_len))
 
-    # Test 3a: Disabling RMSNorm
     cfg_no_norm = TransformerConfig(use_rmsnorm=False)
     model_no_norm = TransformerLM(cfg_no_norm)
     model_no_norm.eval()
 
-    # Test 3b: Disabling RoPE
     cfg_no_rope = TransformerConfig(use_rope=False)
     model_no_rope = TransformerLM(cfg_no_rope)
     model_no_rope.eval()
 
-    # Test 3c: Switching FFN to ReLU
     cfg_relu = TransformerConfig(ffn_type="relu")
     model_relu = TransformerLM(cfg_relu)
     model_relu.eval()
@@ -131,10 +128,8 @@ def test_5_kv_cache_matches_full_forward():
     )
 
     with torch.no_grad():
-        # Normal forward pass
         full_logits = model(tokens)
 
-        # Cached autoregressive forward pass
         model.reset_cache(
             batch_size=1,
             device=tokens.device,

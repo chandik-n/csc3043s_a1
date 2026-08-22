@@ -9,16 +9,9 @@ import torch.nn as nn
 from src.model import TransformerLM, TransformerConfig
 
 
-def compute_metrics_non_overlapping(
-    model, memmap_data, context_length, batch_size, device, use_autocast, autocast_dtype, chars_per_token
-):
-    """
-    Evaluates the model over whole non-overlapping windows of context_length.
-    Slices the raw memmap array directly with a stride of context_length.
-    """
+def compute_metrics_non_overlapping(model, memmap_data, context_length, batch_size, device, use_autocast, autocast_dtype, chars_per_token):
     model.eval()
     total_tokens_in_file = len(memmap_data)
-    # Total whole context windows available
     num_windows = (total_tokens_in_file - 1) // context_length
 
     if num_windows == 0:
@@ -26,8 +19,6 @@ def compute_metrics_non_overlapping(
             f"Data file length ({total_tokens_in_file}) is too short for context_length={context_length}."
         )
 
-    # Pre-build non-overlapping (x, y) window inputs & targets
-    # Window k spans tokens [k*ctx : k*ctx + ctx + 1]
     xs, ys = [], []
     for k in range(num_windows):
         start = k * context_length
@@ -35,8 +26,8 @@ def compute_metrics_non_overlapping(
         xs.append(chunk[:-1])
         ys.append(chunk[1:])
 
-    xs = torch.from_numpy(np.array(xs))  # Shape: (num_windows, context_length)
-    ys = torch.from_numpy(np.array(ys))  # Shape: (num_windows, context_length)
+    xs = torch.from_numpy(np.array(xs))
+    ys = torch.from_numpy(np.array(ys))
 
     total_nll = 0.0
     total_tokens = 0
@@ -48,7 +39,6 @@ def compute_metrics_non_overlapping(
 
             with torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=use_autocast):
                 logits = model(x_batch)
-                # Compute total sum of NLL across all tokens in batch
                 loss_sum = nn.functional.cross_entropy(
                     logits.reshape(-1, logits.size(-1)).float(),
                     y_batch.reshape(-1),
@@ -58,14 +48,13 @@ def compute_metrics_non_overlapping(
             total_nll += loss_sum.item()
             total_tokens += y_batch.numel()
 
-    # 1. Mean NLL per token (in nats)
+    #1. Mean NLL per token (in nats)
     mean_nll_per_token = total_nll / total_tokens if total_tokens > 0 else 0.0
 
-    # 2. Perplexity (PPL)
+    #2. Perplexity (PPL)
     ppl = math.exp(mean_nll_per_token)
 
-    # 3. Bits-Per-Character (BPC)
-    # BPC = (mean_nll_per_token / ln(2)) / chars_per_token
+    #3. Bits-Per-Character (BPC)
     total_bits = total_nll / math.log(2)
     total_chars = total_tokens * chars_per_token
     bpc = total_bits / total_chars if total_chars > 0 else 0.0
@@ -91,7 +80,6 @@ def main():
         help="Context length for non-overlapping windows. Defaults to model training context_length.",
     )
 
-    # Forced required argument to prevent accidental miscalculation under deadline pressure
     parser.add_argument(
         "--chars_per_token",
         type=float,
@@ -100,7 +88,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Hardware Setup
     if torch.cuda.is_available():
         device = torch.device("cuda")
         autocast_dtype = torch.bfloat16
@@ -113,11 +100,9 @@ def main():
     print(f"Loading checkpoint: {args.checkpoint}")
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
 
-    # Load original config
     config_dict = ckpt["config"]
     config = TransformerConfig(**config_dict)
 
-    # Handle context_length specification prior to constructing model (protects RoPE buffers)
     if args.context_length is not None:
         if args.context_length != config.context_length:
             print(
@@ -126,11 +111,9 @@ def main():
             )
         config.context_length = args.context_length
 
-    # Instantiate model with final config
     model = TransformerLM(config).to(device)
     model.load_state_dict(ckpt["model_state"])
 
-    # Memory-map the evaluation dataset directly (uint16 format assumed)
     eval_memmap = np.memmap(args.eval_data, dtype=np.uint16, mode="r")
 
     print(f"Evaluating {len(eval_memmap):,} raw tokens from {args.eval_data}...")

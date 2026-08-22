@@ -50,7 +50,7 @@ def main():
 
     python_bin = sys.executable
 
-    # 1. Uninterrupted run: 50 steps
+    #1. Uninterrupted run: 50 steps
     print("\n=== 1. Running 50 steps uninterrupted ===")
     cmd_full = [
         python_bin,
@@ -79,7 +79,7 @@ def main():
     ]
     run_command(cmd_full)
 
-    # 2. First 25 steps (saving checkpoint at step 25)
+    #2. First 25 steps (saving checkpoint at step 25)
     print("=== 2. Running first 25 steps ===")
     cmd_part1 = [
         python_bin,
@@ -108,7 +108,7 @@ def main():
     ]
     run_command(cmd_part1)
 
-    # 3. Resume from step 25 to 50
+    #3. Resume from step 25 to 50
     print("=== 3. Resuming from step 25 to 50 ===")
     ckpt_25 = os.path.join(RESUMED_DIR, "checkpoint_step_25.pt")
     cmd_part2 = [

@@ -60,14 +60,12 @@ def get_lr_scheduler(optimizer, warmup_steps, max_steps, base_lr):
 
 
 def evaluate(model, val_dataset, batch_size, device, use_autocast, autocast_dtype, seed=42, eval_batches=20):
-    """Evaluates the model deterministically in O(batch_size) memory per iteration."""
     model.eval()
     total_loss = 0.0
     count = 0
 
     with torch.no_grad():
         for i in range(eval_batches):
-            # Fixed deterministic evaluation step offset
             eval_step = 100_000 + i
             x, y = get_batch(val_dataset, seed, eval_step, batch_size, device)
             with torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=use_autocast):
@@ -81,10 +79,6 @@ def evaluate(model, val_dataset, batch_size, device, use_autocast, autocast_dtyp
 
 
 def get_batch(dataset, seed: int, global_step: int, batch_size: int, device: torch.device):
-    """
-    Generates batch_size starting offsets deterministically per step 
-    without allocating or shuffling full-dataset index permutations.
-    """
     gen_seed = (seed * 1_000_003 + global_step) & 0x7FFFFFFF
     g = torch.Generator().manual_seed(gen_seed)
     
@@ -101,7 +95,7 @@ def main():
     parser.add_argument("--val_data", type=str, required=True)
     parser.add_argument("--out_dir", type=str, default="checkpoints")
 
-    # Training parameters
+    #Training parameters
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--context_length", type=int, default=256)
     parser.add_argument("--max_steps", type=int, default=5000)
@@ -115,7 +109,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume", type=str, default=None)
 
-    # Architecture Flags
+    #Architecture Flags
     parser.add_argument("--vocab_size", type=int, default=1500)
     parser.add_argument("--n_layers", type=int, default=4)
     parser.add_argument("--d_model", type=int, default=512)
@@ -181,7 +175,6 @@ def main():
 
     model.train()
     for step in range(start_step + 1, args.max_steps + 1):
-        # Memory-efficient O(batch_size) batch fetching
         x, y = get_batch(train_dataset, args.seed, step, args.batch_size, device)
 
         optimizer.zero_grad()

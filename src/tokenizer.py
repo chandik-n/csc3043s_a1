@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 from typing import Iterator
 import regex
 
-# Appendix A: GPT-2 pre-tokenizer regex
+#Appendix A: GPT-2 pre-tokenizer regex
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 PRETOKEN_RE = regex.compile(PAT)
 
@@ -160,7 +160,6 @@ class BPETokenizer:
             if min_pair is None or min_rank == float("inf"):
                 break
 
-            # Re-uses your merge_word helper!
             symbols = merge_word(symbols, min_pair)
 
         ids = [self.bytes_to_id[sym] for sym in symbols]

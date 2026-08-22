@@ -27,7 +27,6 @@ class MemmapDataset(Dataset):
             y = torch.from_numpy(chunk[:, 1:]).contiguous()
             return x, y
         else:
-            # Single index fallback
             chunk = self.data[idx : idx + self.context_length + 1].astype(np.int64)
             x = torch.from_numpy(chunk[:-1]).contiguous()
             y = torch.from_numpy(chunk[1:]).contiguous()

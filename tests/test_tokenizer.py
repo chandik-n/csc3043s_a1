@@ -239,13 +239,11 @@ def test_8_validation_100_docs_round_trip():
         print("Test 8 Skipped: data/TinyStories_train.txt or TinyStories_val.txt missing.")
         return
 
-    # 1. Train a BPE tokenizer dynamically on a slice of training data
     print("Training temporary tokenizer for Test 8...")
     vocab, merges = train_bpe(
         str(train_path), vocab_size=1000, special_tokens=[END_OF_TEXT]
     )
 
-    # 2. Save temporarily to test loading from disk
     with tempfile.TemporaryDirectory() as tmpdir:
         vocab_path = Path(tmpdir) / "vocab.json"
         merges_path = Path(tmpdir) / "merges.txt"
@@ -255,14 +253,12 @@ def test_8_validation_100_docs_round_trip():
             str(vocab_path), str(merges_path), special_tokens=[END_OF_TEXT]
         )
 
-        # 3. Read 100 validation docs
         with open(val_path, "r", encoding="utf-8") as f:
             content = f.read()
             docs = [d.strip() for d in content.split("<|endoftext|>") if d.strip()][:100]
 
         assert len(docs) == 100, f"Expected 100 docs from validation set, found {len(docs)}"
 
-        # 4. Assert 100% round-trip string equality
         mismatches = 0
         for idx, doc in enumerate(docs):
             encoded = tokenizer.encode(doc)

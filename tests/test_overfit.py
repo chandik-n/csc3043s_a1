@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from pathlib import Path
 import sys
 
+# Add project root directory to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -26,7 +27,6 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Small debug model
     config = TransformerConfig(
         vocab_size=4000,
         context_length=256,
@@ -46,7 +46,6 @@ def main():
         context_length=256,
     )
 
-    # Grab ONE fixed batch and never change it.
     batch_indices = np.arange(8)
     x, y = dataset[batch_indices]
     x = x.to(device)
