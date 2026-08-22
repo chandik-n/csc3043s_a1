@@ -20,8 +20,8 @@ echo "=========================================================="
 
 # Section 7.1 LR Sweep: Run 1 (LR = 1e-4) - Successful Convergence
 python -m src.train \
-  --train_data /content/drive/MyDrive/train_4k.bin \
-  --val_data /content/drive/MyDrive/val_4k.bin \
+  --train_data data/train_4k.bin \
+  --val_data data/val_4k.bin \
   --out_dir checkpoints/lr_sweep_1e-4 \
   --vocab_size 4000 \
   --n_layers 4 \
@@ -38,8 +38,8 @@ python -m src.train \
 
 # Section 7.1 LR Sweep: Run 2 (LR = 3e-4) - Successful Convergence
 python -m src.train \
-  --train_data /content/drive/MyDrive/train_4k.bin \
-  --val_data /content/drive/MyDrive/val_4k.bin \
+  --train_data data/train_4k.bin \
+  --val_data data/val_4k.bin \
   --out_dir checkpoints/lr_sweep_3e-4 \
   --vocab_size 4000 \
   --n_layers 4 \
@@ -56,8 +56,8 @@ python -m src.train \
 
 # Section 7.1 LR Sweep: Run 3 (LR = 1e-3) - Successful Convergence
 python -m src.train \
-  --train_data /content/drive/MyDrive/train_4k.bin \
-  --val_data /content/drive/MyDrive/val_4k.bin \
+  --train_data data/train_4k.bin \
+  --val_data data/val_4k.bin \
   --out_dir checkpoints/lr_sweep_1e-3 \
   --vocab_size 4000 \
   --n_layers 4 \
@@ -74,8 +74,8 @@ python -m src.train \
 
 # Section 7.1 LR Sweep: Run 4 (LR = 3e-3) - Successful Convergence
 python -m src.train \
-  --train_data /content/drive/MyDrive/train_4k.bin \
-  --val_data /content/drive/MyDrive/val_4k.bin \
+  --train_data data/train_4k.bin \
+  --val_data data/val_4k.bin \
   --out_dir checkpoints/lr_sweep_3e-3 \
   --vocab_size 4000 \
   --n_layers 4 \
@@ -92,8 +92,8 @@ python -m src.train \
 
 # Section 7.1 LR Sweep: Run 5 (LR = 1e-2) - Over-shooting
 python -m src.train \
-  --train_data /content/drive/MyDrive/train_4k.bin \
-  --val_data /content/drive/MyDrive/val_4k.bin \
+  --train_data data/train_4k.bin \
+  --val_data data/val_4k.bin \
   --out_dir checkpoints/lr_sweep_1e-2 \
   --vocab_size 4000 \
   --n_layers 4 \

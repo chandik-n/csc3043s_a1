@@ -1,0 +1,14 @@
+=== Greedy (T=0) ===
+Once upon a time, there was a little girl named Lily. She had a big, red ball. She loved to play with her ball in the park. One day, she saw a boy named Tom. Tom was sad. Lily wanted to help Tom. Lily said, "Tom, let's play together!" Tom smiled and said, "Yes, let's play!" They played catch with the ball. They threw the ball back and forth. They had lots of fun.
+
+=== Top-p (p=0.9, T=0.8) ===
+Once upon a time, there was a little girl named Lily. She lived in a small house with her mom and dad. Lily loved to play with her ball and have fun. One day, Lily was playing with her ball in her room. Her mom said, "Lily, I want to go to the bedroom. It is so beautiful." Lily took her mom's ball and went to the park. She played with her friends all day long.
+
+=== Combined (k=40, p=0.9, T=0.8) ===
+Once upon a time, there was a little girl. She lived in a small town. She had a big, shiny ball. She loved to play with it. One day, she went to the park and saw a new friend. They played together all day long. They became best friends and played every day.
+
+=== Degenerate (T=1.5, top_k=5) ===
+Once upon a time, there was a little girl. She was a little girl. She was a little girl. She was a little girl. She was a little girl. She was a little girl. She was a little girl. She was a little girl. She was a little girl.
+
+=== Systematic Model Failure (Not a Decoding Artefact) ===
+Once upon a time, there was a little girl who loved to play. She had a big, round leaves and a fast a little girl named Lucy. She loved to play with her friends and play with her friends. One day, she saw a big tree with a shiny coin. She wanted to climb the tree and go down.

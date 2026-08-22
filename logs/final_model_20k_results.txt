@@ -1,0 +1,14 @@
+FINAL MODEL (20,000 STEPS) - FULL EVALUATION
+==================================================
+
+VALIDATION HOLDOUT (first ~25,000 docs):
+  Loss: 1.5444
+  PPL:  4.6851
+  BPC:  0.5598
+  Tokens: 5,185,140
+
+TEST SET (last 2,000 docs - Touched Once):
+  Loss: 1.5618
+  PPL:  4.7675
+  BPC:  0.5661
+  Tokens: 404,244

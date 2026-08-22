@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 import tempfile
 from collections import Counter
 from pathlib import Path
@@ -90,7 +91,7 @@ def test_1_pretokenisation():
     tokens = pretokenize(text)
     expected = ["Hello", ",", " world", "!"]
     assert tokens == expected, f"Expected {expected}, got {tokens}"
-    print("✓ Test 1 Passed: Pretokenisation matches GPT-2 regex expectations.")
+    print(" Test 1 Passed: Pretokenisation matches GPT-2 regex expectations.")
 
 
 def test_2_special_tokens():
@@ -98,7 +99,7 @@ def test_2_special_tokens():
     counts = count_pretokens(text, special_tokens=[END_OF_TEXT])
     assert END_OF_TEXT not in counts, "Special token leaked into pre-token counts."
     assert set(counts.keys()) == {"Hello", "world"}, f"Unexpected pre-tokens: {counts}"
-    print("✓ Test 2 Passed: Special tokens correctly isolated.")
+    print(" Test 2 Passed: Special tokens correctly isolated.")
 
 
 def test_3_incremental_vs_reference_bpe():
@@ -122,7 +123,59 @@ def test_3_incremental_vs_reference_bpe():
 
         assert ref_vocab == opt_vocab, "Vocabularies differ between reference and incremental BPE!"
         assert ref_merges == opt_merges, "Merges differ between reference and incremental BPE!"
-        print("✓ Test 3 Passed: Incremental BPE produced byte-identical merges to reference implementation.")
+        print(" Test 3 Passed: Incremental BPE produced byte-identical merges to reference implementation.")
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
+def test_3b_benchmark_speedup():
+    print("\n" + "=" * 60)
+    print("Q2 BENCHMARK: Naive vs Optimised BPE Training")
+    print("=" * 60)
+
+    corpus = (
+        "low low low low\n"
+        "lower lower widest widest\n"
+        "newest newest newest\n"
+        "Hello world! Testing BPE optimization.\n"
+        "The quick brown fox jumps over the lazy dog.\n"
+        "She sells sea shells by the sea shore.\n"
+        "How much wood would a woodchuck chuck if a woodchuck could chuck wood?\n"
+        "Peter Piper picked a peck of pickled peppers.\n"
+        "Betty Botter bought some butter but she said the butter's bitter.\n"
+    ) * 100
+
+    with tempfile.NamedTemporaryFile("w+", encoding="utf-8", delete=False) as tmp:
+        tmp.write(corpus)
+        tmp_path = tmp.name
+
+    try:
+        print("Running naive implementation...")
+        start = time.time()
+        ref_vocab, ref_merges = train_bpe_reference(
+            tmp_path, vocab_size=280, special_tokens=[END_OF_TEXT]
+        )
+        naive_time = time.time() - start
+
+        print("Running optimised implementation...")
+        start = time.time()
+        opt_vocab, opt_merges = train_bpe(
+            tmp_path, vocab_size=280, special_tokens=[END_OF_TEXT]
+        )
+        opt_time = time.time() - start
+
+        assert ref_vocab == opt_vocab, "Vocabularies differ!"
+        assert ref_merges == opt_merges, "Merges differ!"
+
+        speedup = naive_time / opt_time
+
+        print("-" * 40)
+        print(f"Naive (reference) time:   {naive_time:.4f}s")
+        print(f"Optimised time:           {opt_time:.4f}s")
+        print(f"Speedup:                  {speedup:.1f}x")
+        print("-" * 40)
+        print(f"Q2 Benchmark complete!")
+
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -148,7 +201,7 @@ def test_4_encode_decode_round_trip():
         for text in test_strings:
             decoded = tokenizer.decode(tokenizer.encode(text))
             assert decoded == text, f"Round-trip failed for '{text}'. Got: '{decoded}'"
-        print("✓ Test 4 Passed: Encode/decode round trip verified (including multi-byte UTF-8).")
+        print(" Test 4 Passed: Encode/decode round trip verified (including multi-byte UTF-8).")
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -172,7 +225,7 @@ def test_5_special_token_round_trip():
         assert special_id in encoded, "Special token ID missing from stream."
         assert encoded.count(special_id) == 1, "Special token count mismatch."
         assert tokenizer.decode(encoded) == text, "Special token round-trip mismatch."
-        print("✓ Test 5 Passed: Special token round-trip verified.")
+        print("Test 5 Passed: Special token round-trip verified.")
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -195,7 +248,7 @@ def test_6_encode_iterable():
             expected_ids.extend(tokenizer.encode(chunk))
 
         assert streamed_ids == expected_ids, f"Streamed IDs mismatched! Streamed: {streamed_ids}, Expected: {expected_ids}"
-        print("✓ Test 6 Passed: encode_iterable streaming yields identical tokens.")
+        print("Test 6 Passed: encode_iterable streaming yields identical tokens.")
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -225,11 +278,12 @@ def test_7_from_files():
         decoded = tokenizer.decode(encoded)
 
         assert decoded == sample_text, f"Deserialized tokenizer failed round-trip! Got '{decoded}'"
-        print("✓ Test 7 Passed: BPETokenizer.from_files loading and encoding verified.")
+        print("Test 7 Passed: BPETokenizer.from_files loading and encoding verified.")
     finally:
         Path(corpus_path).unlink(missing_ok=True)
         Path(vocab_path).unlink(missing_ok=True)
         Path(merges_path).unlink(missing_ok=True)
+
 
 def test_8_validation_100_docs_round_trip():
     train_path = PROJECT_ROOT / "data" / "TinyStories_train_part1.txt"
@@ -270,7 +324,7 @@ def test_8_validation_100_docs_round_trip():
                 print(f"  Got:      {repr(decoded[:60])}")
 
         assert mismatches == 0, f"{mismatches}/100 validation documents failed round-trip!"
-        print("✓ Test 8 Passed: 100 real validation documents passed encode -> decode round-trip.")
+        print("Test 8 Passed: 100 real validation documents passed encode -> decode round-trip.")
 
 
 if __name__ == "__main__":
@@ -278,6 +332,7 @@ if __name__ == "__main__":
     test_1_pretokenisation()
     test_2_special_tokens()
     test_3_incremental_vs_reference_bpe()
+    test_3b_benchmark_speedup()  
     test_4_encode_decode_round_trip()
     test_5_special_token_round_trip()
     test_6_encode_iterable()
